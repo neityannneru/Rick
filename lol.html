@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Rick.mp4 自動再生</title>
+    <style>
+        html,body { height:100%; margin:0; background:#000; }
+        video { width:100%; height:100%; object-fit:cover; display:block; }
+        #unmute {
+            position:fixed;
+            right:16px;
+            bottom:16px;
+            padding:8px 12px;
+            font-size:14px;
+            background:rgba(0,0,0,0.6);
+            color:#fff;
+            border:1px solid rgba(255,255,255,0.2);
+            border-radius:4px;
+            cursor:pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- 同じフォルダに Rick.mp4 を置いてください -->
+    <video id="video" src="Rick.mp4" autoplay muted playsinline loop preload="auto"></video>
+
+    <!-- ブラウザは音声付きの自動再生を制限するため、必要に応じてユーザー操作でミュート解除するボタン -->
+    <button id="unmute">音を有効にする</button>
+
+    <script>
+        const v = document.getElementById('video');
+        const btn = document.getElementById('unmute');
+
+        // 動画が再生開始されない場合に備えて再生を試みる
+        v.play().catch(()=>{ /* 自動再生がブロックされた */ });
+
+        btn.addEventListener('click', () => {
+            v.muted = false;
+            v.play().catch(()=>{});
+            btn.style.display = 'none';
+        });
+
+        // タップやキー操作でもボタン非表示にする（UX向上）
+        ['keydown','pointerdown','touchstart'].forEach(e =>
+            document.addEventListener(e, () => { if (!v.muted) btn.style.display='none'; }, { once:true })
+        );
+
+        let currentX = window.screenX;
+        let currentY = window.screenY;
+        let velocityX = 5; // X方向の速度
+        let velocityY = 5; // Y方向の速度
+        
+        // ウィンドウのサイズ
+        const WINDOW_WIDTH = 100;
+        const WINDOW_HEIGHT = 100;
+
+        // 画面の境界を確認して速度を反転
+        function checkBoundaries() {
+            const screenWidth = window.screen.availWidth;
+            const screenHeight = window.screen.availHeight;
+
+            // 右端または左端に到達
+            if (currentX + WINDOW_WIDTH > screenWidth || currentX < 0) {
+                velocityX = -velocityX;
+                // 境界内に収める
+                currentX = Math.max(0, Math.min(screenWidth - WINDOW_WIDTH, currentX));
+            }
+
+            // 下端または上端に到達
+            if (currentY + WINDOW_HEIGHT > screenHeight || currentY < 0) {
+                velocityY = -velocityY;
+                // 境界内に収める
+                currentY = Math.max(0, Math.min(screenHeight - WINDOW_HEIGHT, currentY));
+            }
+        }
+
+        // ウィンドウを移動
+        function moveWindow() {
+            // 現在の位置を更新
+            currentX += velocityX;
+            currentY += velocityY;
+
+            // 境界チェックと速度の反転
+            checkBoundaries();
+
+            // ウィンドウを移動
+            window.moveTo(Math.round(currentX), Math.round(currentY));
+        }
+
+        // 一定間隔で更新（約60FPS）
+        setInterval(moveWindow, 10);
+    </script>
+</body>
+</html>

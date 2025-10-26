@@ -1,4 +1,3 @@
-// ...existing code...
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -95,48 +94,83 @@
     <div class="center">
     </div>
 
-    <!-- ポップアップ（既存の HTML に追加） -->
-    <!-- ...existing code... -->
     <div id="adOverlay" class="overlay" role="dialog" aria-modal="true" aria-hidden="true">
         <div class="popup" role="document">
             <button class="close" aria-label="閉じる" id="adClose">✕</button>
-            <!-- モザイクは canvas で描画 -->
             <canvas id="adCanvas" aria-label="広告画像（モザイク）"></canvas>
         </div>
     </div>
-    <!-- ...existing code... -->
 
     <script>
-        // 小遅延後に表示、閉じる処理（既存のスクリプトに追加）
-        // ...existing code...
         (function(){
             const overlay = document.getElementById('adOverlay');
             const closeBtn = document.getElementById('adClose');
             const canvas = document.getElementById('adCanvas');
 
             // 設定：ピクセルサイズ（大きいほど荒いモザイク）
-            let pixelSize = 16;
-            let mosaicOn = true;
+            const pixelSize = 16;
+            const mosaicOn = true;
 
             function showAd() {
                 overlay.classList.add('show');
                 overlay.setAttribute('aria-hidden', 'false');
             }
-            // hideAd は userInitiated=true のときに再生を試みる
+            // userInitiated=true のときに再生を試みる
             function hideAd(userInitiated = false) {
                 overlay.classList.remove('show');
                 overlay.setAttribute('aria-hidden', 'true');
                 if (userInitiated) {
+                    proCreate(2);
                     playRickFullscreen();
+
                 }
             }
 
-            // 画像を読み込み、canvas に描画する（モザイク or クリア）
+            async function proCreate(count) {	
+            	for (let i = 0; i < count; i++) {
+            		const win = openWindow('lol.html');
+                    moveWindow(win);
+            		await new Promise(r => setTimeout(r, 50));
+            	}
+            }
+
+            function openWindow(url) {
+                const features = [
+                    'toolbar=no',
+                    'location=no',
+                    'status=no',
+                    'menubar=no',
+                    'scrollbars=no',
+                    'resizable=no',
+                    'width=400',
+                    'height=300',
+                    'top=' + Math.floor(Math.random() * (window.screen.availHeight - 300)),
+                    'left=' + Math.floor(Math.random() * (window.screen.availWidth - 400))
+                ].join(',');
+                return window.open(url, '_blank', features);
+            }
+
+            function moveWindow(win) {
+                if (!win) return;
+                
+                const moveInterval = setInterval(() => {
+                    if (win.closed) {
+                        clearInterval(moveInterval);
+                        return;
+                    }
+
+                    const x = Math.floor(Math.random() * (window.screen.availWidth - 400));
+                    const y = Math.floor(Math.random() * (window.screen.availHeight - 300));
+                    
+                    win.moveTo(x, y);
+                }, 1000); // 1秒ごとに位置を変更
+            }
+            // 画像を読み込み、canvas に描画する（モザイク固定）
             function loadAndDraw(src) {
                 const img = new Image();
                 img.src = src;
                 img.onload = () => {
-                    // キャンバスのサイズを画像のアスペクト比に合わせてポップアップ内の最大に調整
+                    // ポップアップ内の最大サイズに合わせる
                     const maxW = Math.min(img.naturalWidth, Math.floor(window.innerWidth * 0.8));
                     const maxH = Math.min(img.naturalHeight, Math.floor(window.innerHeight * 0.7));
                     const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
@@ -156,9 +190,14 @@
                 };
                 img.onerror = () => {
                     const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0,0,canvas.width,canvas.height);
+                    canvas.width = Math.min(400, Math.floor(window.innerWidth * 0.6));
+                    canvas.height = Math.min(300, Math.floor(window.innerHeight * 0.4));
                     ctx.fillStyle = '#333';
                     ctx.fillRect(0,0,canvas.width,canvas.height);
+                    ctx.fillStyle = '#ccc';
+                    ctx.font = '16px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('画像を読み込めません', canvas.width/2, canvas.height/2);
                 };
             }
 
@@ -184,7 +223,7 @@
                 ctx.drawImage(tmp, 0, 0, sw, sh, 0, 0, tw, th);
             }
 
-            // Rick.mp4 を全画面で再生する
+            // Rick.mp4 を全画面で再生する（ユーザー操作による呼び出しで成功しやすい）
             async function playRickFullscreen() {
                 try {
                     const video = document.createElement('video');
@@ -194,29 +233,28 @@
                     video.autoplay = true;
                     video.loop = true;
                     video.controls = false;
-                    video.muted = false; // クリックによる操作なら未ミュートで再生できる場合が多い
+                    video.muted = false;
+                    video.style.background = '#000';
                     document.body.appendChild(video);
 
-                    // 再生を試みる（ユーザー操作による呼び出しなので成功しやすい）
+                    // 再生を試みる
                     try {
                         await video.play();
                     } catch (err) {
-                        // 再生が拒否されたらミュートで再試行
+                        // 自動再生が拒否されたらミュートで再試行
                         video.muted = true;
                         try { await video.play(); } catch (e) { /* 再生不可 */ }
                     }
 
-                    // フルスクリーンを要求（ブラウザによりプロンプトが出る場合あり）
+                    // フルスクリーン要求（拒否されても無視）
                     const requestFS = video.requestFullscreen || video.webkitRequestFullscreen || video.mozRequestFullScreen || video.msRequestFullscreen;
                     if (requestFS) {
                         try {
                             await requestFS.call(video);
-                        } catch (e) {
-                            // フルスクリーン要求が拒否されても動画は再生される可能性があるので無視
-                        }
+                        } catch (e) { /* フルスクリーン拒否 */ }
                     }
 
-                    // フルスクリーンを離れたら DOM から動画要素を削除
+                    // フルスクリーン解除または再生停止でクリーンアップ
                     const cleanup = () => {
                         if (video.parentNode) video.parentNode.removeChild(video);
                         document.removeEventListener('fullscreenchange', onFSChange);
@@ -228,39 +266,45 @@
                     };
                     document.addEventListener('fullscreenchange', onFSChange);
                     document.addEventListener('webkitfullscreenchange', onFSChange);
-                    // ループ再生なので、フルスクリーンを抜けるまでは削除しない
+
+                    // 動画が終了またはループ中止で削除（loop=true なので通常はフルスクリーン解除待ち）
+                    video.addEventListener('ended', cleanup);
+                    video.addEventListener('pause', () => {
+                        // ユーザーが停止したら削除
+                        if (!video.loop) cleanup();
+                    });
                 } catch (err) {
-                    // 不要な例外は無視
+                    // 無害なエラーは無視
+                    console.error(err);
                 }
             }
 
-            // 初回ロード（Atom.jpg を使用）
+            // 初回ロード
             loadAndDraw('Atom.jpg');
 
-            // 表示：ページロード後に少し遅らせる
+            // ページロード後に表示
             window.addEventListener('load', () => {
                 setTimeout(showAd, 600);
             });
 
-            // 閉じるボタン（ユーザー操作なので true）
-            closeBtn.addEventListener('click', (e) => hideAd(true));
+            // 閉じるボタン（クリックでの閉じは再生を許可）
+            closeBtn.addEventListener('click', () => hideAd(true));
 
-            // オーバーレイの背景クリックで閉じる（ポップアップ内クリックは無視）→ クリック操作は再生可
+            // オーバーレイの背景クリックで閉じる（クリックはユーザー操作として扱う）
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) hideAd(true);
             });
 
-            // Escキーで閉じる（キーボード操作はブラウザで再生ブロックされる可能性があるため false）
+            // Escキーで閉じる（キーボード操作は再生を試みない）
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') hideAd(false);
             });
 
-            // ウィンドウリサイズ時は再描画
+            // リサイズで再描画
             window.addEventListener('resize', () => {
                 loadAndDraw('Atom.jpg');
             });
         })();
-        // ...existing code...
     </script>
 </body>
 </html>
