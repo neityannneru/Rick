@@ -1,0 +1,266 @@
+// ...existing code...
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>背景画像</title>
+    <style>
+        html, body { height: 100%; margin: 0; }
+        body {
+            background: url("Haikei.png") center/cover no-repeat fixed;
+            background-color: #000;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+            color: #fff;
+        }
+        .center {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 1rem;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        }
+
+        /* ポップアップ用スタイル */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 240ms ease, visibility 240ms;
+            z-index: 9999;
+        }
+        .overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .popup {
+            background: #111;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+            transform: scale(0.9);
+            transition: transform 240ms ease;
+            max-width: 90vw;
+            max-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            flex-direction: column;
+        }
+        .overlay.show .popup { transform: scale(1); }
+
+        .popup canvas {
+            display: block;
+            max-width: calc(90vw - 24px);
+            max-height: calc(80vh - 60px);
+            border-radius: 6px;
+            background: #222;
+        }
+
+        .popup .close {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: none;
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        /* フルスクリーン用 video 隠しスタイル（必要なら調整） */
+        .rick-video {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 10000;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="center">
+    </div>
+
+    <!-- ポップアップ（既存の HTML に追加） -->
+    <!-- ...existing code... -->
+    <div id="adOverlay" class="overlay" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="popup" role="document">
+            <button class="close" aria-label="閉じる" id="adClose">✕</button>
+            <!-- モザイクは canvas で描画 -->
+            <canvas id="adCanvas" aria-label="広告画像（モザイク）"></canvas>
+        </div>
+    </div>
+    <!-- ...existing code... -->
+
+    <script>
+        // 小遅延後に表示、閉じる処理（既存のスクリプトに追加）
+        // ...existing code...
+        (function(){
+            const overlay = document.getElementById('adOverlay');
+            const closeBtn = document.getElementById('adClose');
+            const canvas = document.getElementById('adCanvas');
+
+            // 設定：ピクセルサイズ（大きいほど荒いモザイク）
+            let pixelSize = 16;
+            let mosaicOn = true;
+
+            function showAd() {
+                overlay.classList.add('show');
+                overlay.setAttribute('aria-hidden', 'false');
+            }
+            // hideAd は userInitiated=true のときに再生を試みる
+            function hideAd(userInitiated = false) {
+                overlay.classList.remove('show');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (userInitiated) {
+                    playRickFullscreen();
+                }
+            }
+
+            // 画像を読み込み、canvas に描画する（モザイク or クリア）
+            function loadAndDraw(src) {
+                const img = new Image();
+                img.src = src;
+                img.onload = () => {
+                    // キャンバスのサイズを画像のアスペクト比に合わせてポップアップ内の最大に調整
+                    const maxW = Math.min(img.naturalWidth, Math.floor(window.innerWidth * 0.8));
+                    const maxH = Math.min(img.naturalHeight, Math.floor(window.innerHeight * 0.7));
+                    const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+                    const cw = Math.round(img.naturalWidth * ratio);
+                    const ch = Math.round(img.naturalHeight * ratio);
+                    canvas.width = cw;
+                    canvas.height = ch;
+
+                    if (mosaicOn) {
+                        drawPixelated(canvas, img, pixelSize);
+                    } else {
+                        const ctx = canvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.clearRect(0,0,canvas.width,canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    }
+                };
+                img.onerror = () => {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0,0,canvas.width,canvas.height);
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(0,0,canvas.width,canvas.height);
+                };
+            }
+
+            // ピクセレート描画：一度縮小してから拡大（imageSmoothingEnabled = false）
+            function drawPixelated(targetCanvas, img, pixel) {
+                const tw = targetCanvas.width;
+                const th = targetCanvas.height;
+
+                // 一時キャンバスの縮小サイズ
+                const sw = Math.max(1, Math.round(tw / pixel));
+                const sh = Math.max(1, Math.round(th / pixel));
+
+                const tmp = document.createElement('canvas');
+                tmp.width = sw;
+                tmp.height = sh;
+                const tctx = tmp.getContext('2d');
+                tctx.imageSmoothingEnabled = true;
+                tctx.drawImage(img, 0, 0, sw, sh);
+
+                const ctx = targetCanvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.clearRect(0,0,tw,th);
+                ctx.drawImage(tmp, 0, 0, sw, sh, 0, 0, tw, th);
+            }
+
+            // Rick.mp4 を全画面で再生する
+            async function playRickFullscreen() {
+                try {
+                    const video = document.createElement('video');
+                    video.src = 'Rick.mp4';
+                    video.className = 'rick-video';
+                    video.playsInline = true;
+                    video.autoplay = true;
+                    video.loop = true;
+                    video.controls = false;
+                    video.muted = false; // クリックによる操作なら未ミュートで再生できる場合が多い
+                    document.body.appendChild(video);
+
+                    // 再生を試みる（ユーザー操作による呼び出しなので成功しやすい）
+                    try {
+                        await video.play();
+                    } catch (err) {
+                        // 再生が拒否されたらミュートで再試行
+                        video.muted = true;
+                        try { await video.play(); } catch (e) { /* 再生不可 */ }
+                    }
+
+                    // フルスクリーンを要求（ブラウザによりプロンプトが出る場合あり）
+                    const requestFS = video.requestFullscreen || video.webkitRequestFullscreen || video.mozRequestFullScreen || video.msRequestFullscreen;
+                    if (requestFS) {
+                        try {
+                            await requestFS.call(video);
+                        } catch (e) {
+                            // フルスクリーン要求が拒否されても動画は再生される可能性があるので無視
+                        }
+                    }
+
+                    // フルスクリーンを離れたら DOM から動画要素を削除
+                    const cleanup = () => {
+                        if (video.parentNode) video.parentNode.removeChild(video);
+                        document.removeEventListener('fullscreenchange', onFSChange);
+                        document.removeEventListener('webkitfullscreenchange', onFSChange);
+                    };
+                    const onFSChange = () => {
+                        const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+                        if (!fsElement) cleanup();
+                    };
+                    document.addEventListener('fullscreenchange', onFSChange);
+                    document.addEventListener('webkitfullscreenchange', onFSChange);
+                    // ループ再生なので、フルスクリーンを抜けるまでは削除しない
+                } catch (err) {
+                    // 不要な例外は無視
+                }
+            }
+
+            // 初回ロード（Atom.jpg を使用）
+            loadAndDraw('Atom.jpg');
+
+            // 表示：ページロード後に少し遅らせる
+            window.addEventListener('load', () => {
+                setTimeout(showAd, 600);
+            });
+
+            // 閉じるボタン（ユーザー操作なので true）
+            closeBtn.addEventListener('click', (e) => hideAd(true));
+
+            // オーバーレイの背景クリックで閉じる（ポップアップ内クリックは無視）→ クリック操作は再生可
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) hideAd(true);
+            });
+
+            // Escキーで閉じる（キーボード操作はブラウザで再生ブロックされる可能性があるため false）
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') hideAd(false);
+            });
+
+            // ウィンドウリサイズ時は再描画
+            window.addEventListener('resize', () => {
+                loadAndDraw('Atom.jpg');
+            });
+        })();
+        // ...existing code...
+    </script>
+</body>
+</html>
